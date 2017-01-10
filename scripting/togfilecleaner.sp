@@ -5,7 +5,7 @@
 #include <sourcemod>
 #include <autoexecconfig>	//https://github.com/Impact123/AutoExecConfig or https://forums.alliedmods.net/showthread.php?p=1862459
 
-#define PLUGIN_VERSION "4.2"
+#define PLUGIN_VERSION "4.3"
 //#define DEGUGMODE ""	//uncomment this define to compile with debugging. Be sure to switch back to a compilation without debugging after you have finished your debug.
 
 new Handle:g_hLog = INVALID_HANDLE;
@@ -14,7 +14,9 @@ new bool:g_bLog;					//Enable logs
 new Handle:hKeyValues = INVALID_HANDLE;
 
 new String:g_sCleanPath[PLATFORM_MAX_PATH];		//deleted files log file path
+#if defined DEGUGMODE
 new String:g_sDebugPath[PLATFORM_MAX_PATH];		//debug file path
+#endif
 
 public Plugin:myinfo =
 {
@@ -38,7 +40,9 @@ public OnPluginStart()
 	AutoExecConfig_CleanFile();
 
 	//path builds
+#if defined DEGUGMODE
 	BuildPath(Path_SM, g_sDebugPath, sizeof(g_sDebugPath), "logs/togsfilecleanerdebug.log");
+#endif
 	BuildPath(Path_SM, g_sCleanPath, sizeof(g_sCleanPath), "logs/togsfilecleaner.log");
 }
 
@@ -101,15 +105,25 @@ RunSetups()
 			
 			do
 			{
+				decl String:sSectionName[30];
+				KvGetSectionName(hKeyValues, sSectionName, sizeof(sSectionName));
+				if(!KvGetNum(hKeyValues, "enabled", 0))
+				{
+#if defined DEGUGMODE
+					LogToFileEx(g_sDebugPath, "================================ Setup Ignored - enabled not set to 1: %s ================================", sSectionName);
+					LogToFileEx(g_sDebugPath, "");
+#endif
+					continue;
+				}
+				
 				decl String:sBuffer[PLATFORM_MAX_PATH];
 				new Handle:hDirectory = INVALID_HANDLE;
 				new FileType:type = FileType_Unknown;
 				new Float:fDaysOld;
 				
-				decl String:sDirectory[PLATFORM_MAX_PATH], String:sString[30], String:sExt[30], String:sExclude[30], String:sSectionName[30], String:sAction[30], String:sNewFilePath[PLATFORM_MAX_PATH];
-				new iEnabled, Float:fDays, iCase;
-				iEnabled = KvGetNum(hKeyValues, "enabled", 0);
-				KvGetString(hKeyValues, "filepath", sDirectory, sizeof(sDirectory), "logs");
+				decl String:sFolder[PLATFORM_MAX_PATH], String:sString[30], String:sExt[30], String:sExclude[30], String:sAction[30], String:sNewFilePath[PLATFORM_MAX_PATH];
+				new Float:fDays, iCase;
+				KvGetString(hKeyValues, "filepath", sFolder, sizeof(sFolder), "logs");
 				fDays = KvGetFloat(hKeyValues, "days", 3.0);
 				KvGetString(hKeyValues, "string", sString, sizeof(sString), "none");
 				iCase = KvGetNum(hKeyValues, "case", 1);
@@ -118,21 +132,19 @@ RunSetups()
 				KvGetString(hKeyValues, "action", sAction, sizeof(sAction), "delete");
 				KvGetString(hKeyValues, "newpath", sNewFilePath, sizeof(sNewFilePath), "none");
 				
-				KvGetSectionName(hKeyValues, sSectionName, sizeof(sSectionName));
-				
 #if defined DEGUGMODE
 				LogToFileEx(g_sDebugPath, "==============================================================================================================================");
 				LogToFileEx(g_sDebugPath, "Setup: %s", sSectionName);
 				LogToFileEx(g_sDebugPath, "==============================================================================================================================");
-				LogToFileEx(g_sDebugPath, "Settings set as - enabled: %i, filepath: %s, days: %f, string: %s, case: %i, extension: %s, exlude: %s", iEnabled, sDirectory, fDays, sString, iCase, sExt, sExclude);
+				LogToFileEx(g_sDebugPath, "Settings set as - filepath: %s, days: %f, string: %s, case: %i, extension: %s, exlude: %s", sFolder, fDays, sString, iCase, sExt, sExclude);
 #endif
-				
-				BuildPath(Path_SM, sDirectory, sizeof(sDirectory), "%s", sDirectory);
 
-				if(DirExists(sDirectory))
+				BuildPath(Path_SM, sFolder, sizeof(sFolder), "%s", sFolder);
+
+				if(DirExists(sFolder))
 				{
 #if defined DEGUGMODE
-					LogToFileEx(g_sDebugPath, "Directory found for RunSetups(): %s", sDirectory);
+					LogToFileEx(g_sDebugPath, "Directory found for RunSetups(): %s", sFolder);
 					LogToFileEx(g_sDebugPath, "");
 					
 					if(iCase)
@@ -145,118 +157,94 @@ RunSetups()
 						LogToFileEx(g_sDebugPath, "Looking for files with string (case insensitive) and extensions, excluding files with string: '%s' and '%s', '%s'", sString, sExt, sExclude);
 						LogToFileEx(g_sDebugPath, "");
 					}
+					LogToFileEx(g_sDebugPath, ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> File Search Beginning <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
 #endif
 					
-					if(iEnabled)
+					hDirectory = OpenDirectory(sFolder);
+					if(hDirectory != INVALID_HANDLE)
 					{
-#if defined DEGUGMODE
-						LogToFileEx(g_sDebugPath, ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> File Search Beginning <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
-#endif
-						
-						hDirectory = OpenDirectory(sDirectory);
-						if(hDirectory != INVALID_HANDLE)
+						while(ReadDirEntry(hDirectory, sBuffer, sizeof(sBuffer), type))
 						{
-							while( ReadDirEntry(hDirectory, sBuffer, sizeof(sBuffer), type))
+							if(type == FileType_File)
 							{
-								if(type == FileType_File)
+								if(StrContains(sBuffer, sString, iCase ? true : false) != -1)
 								{
-									//if case sensitive
-									if(iCase)
-									{						
-										if(StrContains(sBuffer, sString, true) != -1)
+#if defined DEGUGMODE
+									LogToFileEx(g_sDebugPath, "File %s contains string %s (case sensitive = %i)", sBuffer, sString, iCase);
+									LogToFileEx(g_sDebugPath, "");
+#endif
+									
+									if((StrContains(sBuffer, sExt, false) != -1) || StrEqual(sExt, "any", false))
+									{
+#if defined DEGUGMODE
+										LogToFileEx(g_sDebugPath, "File %s contains required extension: %s", sBuffer, sExt);
+										LogToFileEx(g_sDebugPath, "");
+#endif
+										
+										if((StrContains(sBuffer, sExclude, false) == -1) && !StrEqual(sExclude, "", false))
 										{
 #if defined DEGUGMODE
-											LogToFileEx(g_sDebugPath, "File %s contains string %s (case sensitive)", sBuffer, sString);
+											LogToFileEx(g_sDebugPath, "File %s excludes the string %s", sBuffer, sExclude);
 											LogToFileEx(g_sDebugPath, "");
 #endif
 											
-											if((StrContains(sBuffer, sExt, false) != -1) || StrEqual(sExt, "any", false))
+											decl String:sDelFile[PLATFORM_MAX_PATH];
+											Format(sDelFile, sizeof(sDelFile), "%s/%s", sFolder, sBuffer);
+											fDaysOld = ((float(GetTime() - GetFileTime(sDelFile, FileTime_LastChange))/86400));
+											
+											if(GetFileTime(sDelFile, FileTime_LastChange) < (GetTime() - (86400 * RoundFloat(fDays)) + 30))
 											{
-#if defined DEGUGMODE
-												LogToFileEx(g_sDebugPath, "File %s contains required extension: %s", sBuffer, sExt);
-												LogToFileEx(g_sDebugPath, "");
-#endif
-												
-												if((StrContains(sBuffer, sExclude, false) == -1) && !StrEqual(sExclude, "", false))
+												if(StrEqual(sAction, "delete", false))
 												{
+													DeleteFile(sDelFile);
+													
 #if defined DEGUGMODE
-													LogToFileEx(g_sDebugPath, "File %s excludes the string %s", sBuffer, sExclude);
+													LogToFileEx(g_sDebugPath, "File deleted: %s (%f days old)", sDelFile, fDaysOld);
 													LogToFileEx(g_sDebugPath, "");
 #endif
 													
-													decl String:sDelFile[PLATFORM_MAX_PATH];
-													Format(sDelFile, sizeof(sDelFile), "%s/%s", sDirectory, sBuffer);
-													fDaysOld = ((float(GetTime() - GetFileTime(sDelFile, FileTime_LastChange))/86400));
-													
-													if(GetFileTime(sDelFile, FileTime_LastChange) < (GetTime() - (86400 * RoundFloat(fDays)) + 30))
+													if(g_bLog)
 													{
-														if(StrEqual(sAction, "delete", false))
-														{
-															DeleteFile(sDelFile);
-															
-#if defined DEGUGMODE
-															LogToFileEx(g_sDebugPath, "File deleted: %s (%f days old)", sDelFile, fDaysOld);
-															LogToFileEx(g_sDebugPath, "");
-#endif
-															
-															if(g_bLog)
-															{
-																LogToFileEx(g_sCleanPath, "Cleared old file: %s (%f days old)", sDelFile, fDaysOld);
-															}
-														}
-														else if(StrEqual(sAction, "move", false) && !StrEqual(sNewFilePath, "none", false))
-														{
-															decl String:sMoveBuild[PLATFORM_MAX_PATH];
-															BuildPath(Path_SM, sMoveBuild, sizeof(sMoveBuild), "%s",sNewFilePath);
-															MoveFile(sDirectory, sMoveBuild, sBuffer);
-															
-#if defined DEGUGMODE
-															LogToFileEx(g_sDebugPath, "File moved: %s (%f days old) to %s", sDelFile, fDaysOld, sNewFilePath);
-															LogToFileEx(g_sDebugPath, "");
-#endif
-															
-															if(g_bLog)
-															{
-																LogToFileEx(g_sCleanPath, "Moved old file: %s (%f days old) to %s", sDelFile, fDaysOld, sNewFilePath);
-															}
-														}
-														else if(StrEqual(sAction, "copy", false) && !StrEqual(sNewFilePath, "none", false))
-														{
-															decl String:sMoveBuild[PLATFORM_MAX_PATH];
-															BuildPath(Path_SM, sMoveBuild, sizeof(sMoveBuild), "%s",sNewFilePath);
-															CopyFile_NotTxt_OverWriteExisting(sDirectory, sMoveBuild, sBuffer);
-															
-#if defined DEGUGMODE
-															LogToFileEx(g_sDebugPath, "File copied: %s (%f days old) to %s", sDelFile, fDaysOld, sNewFilePath);
-															LogToFileEx(g_sDebugPath, "");
-#endif
-															
-															if(g_bLog)
-															{
-																LogToFileEx(g_sCleanPath, "Copied old file: %s (%f days old) to %s", sDelFile, fDaysOld, sNewFilePath);
-															}
-														}
-													}
-													else
-													{
-#if defined DEGUGMODE
-														LogToFileEx(g_sDebugPath, "File %s ignored - Not old enough: %f days old", sDelFile, fDaysOld);
-														LogToFileEx(g_sDebugPath, "");
-#endif
+														LogToFileEx(g_sCleanPath, "Cleared old file: %s (%f days old)", sDelFile, fDaysOld);
 													}
 												}
-												else
+												else if(StrEqual(sAction, "move", false) && !StrEqual(sNewFilePath, "none", false))
 												{
+													decl String:sMoveBuild[PLATFORM_MAX_PATH];
+													BuildPath(Path_SM, sMoveBuild, sizeof(sMoveBuild), "%s",sNewFilePath);
+													MoveFile(sFolder, sMoveBuild, sBuffer);
+													
 #if defined DEGUGMODE
-													LogToFileEx(g_sDebugPath, "File %s ignored for containing string %s", sBuffer, sExclude);
+													LogToFileEx(g_sDebugPath, "File moved: %s (%f days old) to %s", sDelFile, fDaysOld, sNewFilePath);
 													LogToFileEx(g_sDebugPath, "");
 #endif
+													
+													if(g_bLog)
+													{
+														LogToFileEx(g_sCleanPath, "Moved old file: %s (%f days old) to %s", sDelFile, fDaysOld, sNewFilePath);
+													}
+												}
+												else if(StrEqual(sAction, "copy", false) && !StrEqual(sNewFilePath, "none", false))
+												{
+													decl String:sMoveBuild[PLATFORM_MAX_PATH];
+													BuildPath(Path_SM, sMoveBuild, sizeof(sMoveBuild), "%s",sNewFilePath);
+													CopyFile_NotTxt_OverWriteExisting(sFolder, sMoveBuild, sBuffer);
+													
+#if defined DEGUGMODE
+													LogToFileEx(g_sDebugPath, "File copied: %s (%f days old) to %s", sDelFile, fDaysOld, sNewFilePath);
+													LogToFileEx(g_sDebugPath, "");
+#endif
+													
+													if(g_bLog)
+													{
+														LogToFileEx(g_sCleanPath, "Copied old file: %s (%f days old) to %s", sDelFile, fDaysOld, sNewFilePath);
+													}
 												}
 											}
 											else
 											{
 #if defined DEGUGMODE
-												LogToFileEx(g_sDebugPath, "File %s ignored for not having required extension: %s", sBuffer, sExt);
+												LogToFileEx(g_sDebugPath, "File %s ignored - Not old enough: %f days old", sDelFile, fDaysOld);
 												LogToFileEx(g_sDebugPath, "");
 #endif
 											}
@@ -264,137 +252,36 @@ RunSetups()
 										else
 										{
 #if defined DEGUGMODE
-											LogToFileEx(g_sDebugPath, "File %s ignored for not containing string %s (case sensitive)", sBuffer, sString);
+											LogToFileEx(g_sDebugPath, "File %s ignored for containing string %s", sBuffer, sExclude);
 											LogToFileEx(g_sDebugPath, "");
 #endif
 										}
 									}
-									else	//case insensitive
+									else
 									{
-										if(StrContains(sBuffer, sString, false) != -1)
-										{
 #if defined DEGUGMODE
-											LogToFileEx(g_sDebugPath, "File %s contains string %s (case insensitive)", sBuffer, sString);
-											LogToFileEx(g_sDebugPath, "");
+										LogToFileEx(g_sDebugPath, "File %s ignored for not having required extension: %s", sBuffer, sExt);
+										LogToFileEx(g_sDebugPath, "");
 #endif
-
-											if((StrContains(sBuffer, sExt, false) != -1) || StrEqual(sExt, "any", false))
-											{
-#if defined DEGUGMODE
-												LogToFileEx(g_sDebugPath, "File %s contains required extension: %s", sBuffer, sExt);
-												LogToFileEx(g_sDebugPath, "");
-#endif
-												
-												if((StrContains(sBuffer, sExclude, false) == -1) && !StrEqual(sExclude, "", false))
-												{
-#if defined DEGUGMODE
-													LogToFileEx(g_sDebugPath, "File %s does not contain string %s", sBuffer, sExclude);
-													LogToFileEx(g_sDebugPath, "");
-#endif
-													
-													decl String:sDelFile[PLATFORM_MAX_PATH];
-													Format(sDelFile, sizeof(sDelFile), "%s/%s", sDirectory, sBuffer);
-													fDaysOld = ((float(GetTime() - GetFileTime(sDelFile, FileTime_LastChange)))/86400);
-													
-													if(GetFileTime(sDelFile, FileTime_LastChange) < (GetTime() - (86400 * RoundFloat(fDays)) + 30))
-													{
-														if(StrEqual(sAction, "delete", false))
-														{
-															DeleteFile(sDelFile);
-															
-#if defined DEGUGMODE
-															LogToFileEx(g_sDebugPath, "File deleted: %s (%f days old)", sDelFile, fDaysOld);
-															LogToFileEx(g_sDebugPath, "");
-#endif
-															
-															if(g_bLog)
-															{
-																LogToFileEx(g_sCleanPath, "Cleared old file: %s (%f days old)", sDelFile, fDaysOld);
-															}
-														}
-														else if(StrEqual(sAction, "move", false) && !StrEqual(sNewFilePath, "none", false))
-														{
-															decl String:sMoveBuild[PLATFORM_MAX_PATH];
-															BuildPath(Path_SM, sMoveBuild, sizeof(sMoveBuild), "%s",sNewFilePath);
-															MoveFile(sDirectory, sMoveBuild, sBuffer);
-															
-#if defined DEGUGMODE
-															LogToFileEx(g_sDebugPath, "File moved: %s (%f days old) to %s", sDelFile, fDaysOld, sNewFilePath);
-															LogToFileEx(g_sDebugPath, "");
-#endif
-															
-															if(g_bLog)
-															{
-																LogToFileEx(g_sCleanPath, "Moved old file: %s (%f days old) to %s", sDelFile, fDaysOld, sNewFilePath);
-															}
-														}
-														else if(StrEqual(sAction, "copy", false) && !StrEqual(sNewFilePath, "none", false))
-														{
-															decl String:sMoveBuild[PLATFORM_MAX_PATH];
-															BuildPath(Path_SM, sMoveBuild, sizeof(sMoveBuild), "%s",sNewFilePath);
-															CopyFile_NotTxt_OverWriteExisting(sDirectory, sMoveBuild, sBuffer);
-															
-#if defined DEGUGMODE
-															LogToFileEx(g_sDebugPath, "File copied: %s (%f days old) to %s", sDelFile, fDaysOld, sNewFilePath);
-															LogToFileEx(g_sDebugPath, "");
-#endif
-															
-															if(g_bLog)
-															{
-																LogToFileEx(g_sCleanPath, "Copied old file: %s (%f days old) to %s", sDelFile, fDaysOld, sNewFilePath);
-															}
-														}
-													}
-													else
-													{
-#if defined DEGUGMODE
-														LogToFileEx(g_sDebugPath, "File %s ignored - Not old enough: %f days old", sDelFile, fDaysOld);
-														LogToFileEx(g_sDebugPath, "");
-#endif
-													}
-												}
-												else
-												{
-#if defined DEGUGMODE
-													LogToFileEx(g_sDebugPath, "File %s ignored for containing string %s", sBuffer, sExclude);
-													LogToFileEx(g_sDebugPath, "");
-#endif
-												}
-											}
-											else
-											{
-#if defined DEGUGMODE
-												LogToFileEx(g_sDebugPath, "File %s ignored for not having required extension %s", sBuffer, sExt);
-												LogToFileEx(g_sDebugPath, "");
-#endif
-											}
-										}
-										else
-										{
-#if defined DEGUGMODE
-											LogToFileEx(g_sDebugPath, "File %s ignored for not containing string %s (case insensitive)", sBuffer, sString);
-											LogToFileEx(g_sDebugPath, "");
-#endif
-										}
 									}
+								}
+								else
+								{
 #if defined DEGUGMODE
-									LogToFileEx(g_sDebugPath, "------------------------------------------------------ Next File -------------------------------------------------------------");
+									LogToFileEx(g_sDebugPath, "File %s ignored for not containing string %s (case sensitive = %i)", sBuffer, sString, iCase);
+									LogToFileEx(g_sDebugPath, "");
 #endif
 								}
+#if defined DEGUGMODE
+								LogToFileEx(g_sDebugPath, "------------------------------------------------------ Next File -------------------------------------------------------------");
+#endif
 							}
 						}
-						
-#if defined DEGUGMODE
-						LogToFileEx(g_sDebugPath, "---------------------------------------------------- File Search Complete ----------------------------------------------------");
-#endif
 					}
-					else
-					{
+					
 #if defined DEGUGMODE
-						LogToFileEx(g_sDebugPath, "================================ Setup Ignored - enabled not set to 1: %s ================================", sSectionName);
-						LogToFileEx(g_sDebugPath, "");
+					LogToFileEx(g_sDebugPath, "---------------------------------------------------- File Search Complete ----------------------------------------------------");
 #endif
-					}
 				}
 				
 				if(hDirectory != INVALID_HANDLE)
@@ -422,14 +309,24 @@ RunSetups()
 			
 			do
 			{
+				decl String:sSectionName[30];
+				KvGetSectionName(hKeyValues, sSectionName, sizeof(sSectionName));
+				if(!KvGetNum(hKeyValues, "enabled", 0))
+				{
+#if defined DEGUGMODE
+					LogToFileEx(g_sDebugPath, "================================ Setup Ignored - enabled not set to 1: %s ================================", sSectionName);
+					LogToFileEx(g_sDebugPath, "");
+#endif
+					continue;
+				}
+				
 				new String:sBuffer[256];
 				new Handle:hDirectory = INVALID_HANDLE;
 				new FileType:type = FileType_Unknown;
 				new Float:fDaysOld;
 				
-				decl String:sRootFilePath[256], String:sString[30], String:sExt[30], String:sExclude[30], String:sSectionName[30], String:sRootAction[30], String:sNewRootFilePath[256];
-				new iRootEnabled, Float:fRootDays, iRootCase;
-				iRootEnabled = KvGetNum(hKeyValues, "enabled", 0);
+				decl String:sRootFilePath[256], String:sString[30], String:sExt[30], String:sExclude[30], String:sRootAction[30], String:sNewRootFilePath[256];
+				new Float:fRootDays, iRootCase;
 				KvGetString(hKeyValues, "filepath", sRootFilePath, sizeof(sRootFilePath), "");
 				fRootDays = KvGetFloat(hKeyValues, "days", 3.0);
 				KvGetString(hKeyValues, "string", sString, sizeof(sString), "none");
@@ -438,16 +335,14 @@ RunSetups()
 				KvGetString(hKeyValues, "exclude", sExclude, sizeof(sExclude), "");
 				KvGetString(hKeyValues, "action", sRootAction, sizeof(sRootAction), "delete");
 				KvGetString(hKeyValues, "newpath", sNewRootFilePath, sizeof(sNewRootFilePath), "none");
-				
-				KvGetSectionName(hKeyValues, sSectionName, sizeof(sSectionName));
-				
+
 #if defined DEGUGMODE
 				LogToFileEx(g_sDebugPath, "==============================================================================================================================");
 				LogToFileEx(g_sDebugPath, "Setup: %s", sSectionName);
 				LogToFileEx(g_sDebugPath, "==============================================================================================================================");
-				LogToFileEx(g_sDebugPath, "Settings set as - enabled: %i, filepath: %s, days: %f, string: %s, case: %i, extension: %s, exlude: %s", iRootEnabled, sRootFilePath, fRootDays, sString, iRootCase, sExt, sExclude);
+				LogToFileEx(g_sDebugPath, "Settings set as - filepath: %s, days: %f, string: %s, case: %i, extension: %s, exlude: %s", sRootFilePath, fRootDays, sString, iRootCase, sExt, sExclude);
 #endif
-
+				
 				if(DirExists(sRootFilePath) || StrEqual(sRootFilePath, "", false))
 				{
 #if defined DEGUGMODE
@@ -465,215 +360,89 @@ RunSetups()
 						LogToFileEx(g_sDebugPath, "");
 					}
 #endif
-					
-					if(iRootEnabled)
+
+#if defined DEGUGMODE
+					LogToFileEx(g_sDebugPath, ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> File Search Beginning <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+#endif
+					hDirectory = OpenDirectory(sRootFilePath);
+					if(hDirectory != INVALID_HANDLE)
 					{
-#if defined DEGUGMODE
-						LogToFileEx(g_sDebugPath, ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> File Search Beginning <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
-#endif
-						
-						hDirectory = OpenDirectory(sRootFilePath);
-						if(hDirectory != INVALID_HANDLE)
+						while(ReadDirEntry(hDirectory, sBuffer, sizeof(sBuffer), type))
 						{
-							while(ReadDirEntry(hDirectory, sBuffer, sizeof(sBuffer), type))
+							if(type == FileType_File)
 							{
-								if(type == FileType_File)
+								if(StrContains(sBuffer, sString, iRootCase ? true : false) != -1)
 								{
-									//if case sensitive
-									if(iRootCase)
-									{						
-										if(StrContains(sBuffer, sString, true) != -1)
-										{
 #if defined DEGUGMODE
-											LogToFileEx(g_sDebugPath, "File %s contains string %s (case sensitive)", sBuffer, sString);
-											LogToFileEx(g_sDebugPath, "");
+									LogToFileEx(g_sDebugPath, "File %s contains string %s (case sensitive = %i)", sBuffer, sString, iRootCase);
+									LogToFileEx(g_sDebugPath, "");
 #endif
-
-											if((StrContains(sBuffer, sExt, false) != -1) || StrEqual(sExt, "any", false))
-											{
-#if defined DEGUGMODE
-												LogToFileEx(g_sDebugPath, "File %s contains required extension: %s", sBuffer, sExt);
-												LogToFileEx(g_sDebugPath, "");
-#endif
-												
-												if((StrContains(sBuffer, sExclude, false) == -1) && !StrEqual(sExclude, "", false))
-												{
-#if defined DEGUGMODE
-													LogToFileEx(g_sDebugPath, "File %s excludes the string %s", sBuffer, sExclude);
-													LogToFileEx(g_sDebugPath, "");
-#endif
-													
-													decl String:sDelFile[PLATFORM_MAX_PATH];
-													Format(sDelFile, sizeof(sDelFile), "%s/%s", sRootFilePath, sBuffer);
-													fDaysOld = ((float(GetTime() - GetFileTime(sDelFile, FileTime_LastChange)))/86400);
-													if(GetFileTime(sDelFile, FileTime_LastChange) < (GetTime() - (86400 * RoundFloat(fRootDays)) + 30))
-													{
-														if(StrEqual(sRootAction, "delete", false))
-														{
-															DeleteFile(sDelFile);
-															
-#if defined DEGUGMODE
-															LogToFileEx(g_sDebugPath, "File deleted: %s (%f days old)", sDelFile, fDaysOld);
-															LogToFileEx(g_sDebugPath, "");
-#endif
-															
-															if(g_bLog)
-															{
-																LogToFileEx(g_sCleanPath, "Cleared old file: %s (%f days old)", sDelFile, fDaysOld);
-															}
-														}
-														else if(StrEqual(sRootAction, "move", false) && !StrEqual(sNewRootFilePath, "none", false))
-														{
-															MoveFile(sRootFilePath, sNewRootFilePath, sBuffer);
-
-#if defined DEGUGMODE
-															LogToFileEx(g_sDebugPath, "File moved: %s (%f days old) to %s", sDelFile, fDaysOld, sNewRootFilePath);
-															LogToFileEx(g_sDebugPath, "");
-#endif
-															
-															if(g_bLog)
-															{
-																LogToFileEx(g_sCleanPath, "Moved old file: %s (%f days old) to %s", sDelFile, fDaysOld, sNewRootFilePath);
-															}
-														}
-														else if(StrEqual(sRootAction, "copy", false) && !StrEqual(sNewRootFilePath, "none", false))
-														{
-															CopyFile_NotTxt_OverWriteExisting(sRootFilePath, sNewRootFilePath, sBuffer);
-
-#if defined DEGUGMODE
-															LogToFileEx(g_sDebugPath, "File copied: %s (%f days old) to %s", sDelFile, fDaysOld, sNewRootFilePath);
-															LogToFileEx(g_sDebugPath, "");
-#endif
-															
-															if(g_bLog)
-															{
-																LogToFileEx(g_sCleanPath, "Copied old file: %s (%f days old) to %s", sDelFile, fDaysOld, sNewRootFilePath);
-															}
-														}
-													}
-													else
-													{
-#if defined DEGUGMODE
-														LogToFileEx(g_sDebugPath, "File %s ignored - Not old enough: %f days old", sDelFile, fDaysOld);
-														LogToFileEx(g_sDebugPath, "");
-#endif
-													}
-												}
-												else
-												{
-#if defined DEGUGMODE
-													LogToFileEx(g_sDebugPath, "File %s ignored for containing string %s", sBuffer, sExclude);
-													LogToFileEx(g_sDebugPath, "");
-#endif
-												}
-											}
-											else
-											{
-#if defined DEGUGMODE
-												LogToFileEx(g_sDebugPath, "File %s ignored for not having required extension: %s", sBuffer, sExt);
-												LogToFileEx(g_sDebugPath, "");
-#endif
-											}
-										}
-										else
-										{
-#if defined DEGUGMODE
-											LogToFileEx(g_sDebugPath, "File %s ignored for not containing string %s (case sensitive)", sBuffer, sString);
-											LogToFileEx(g_sDebugPath, "");
-#endif
-										}
-									}
-									else	//case insensitive
+									if((StrContains(sBuffer, sExt, false) != -1) || StrEqual(sExt, "any", false))
 									{
-										if(StrContains(sBuffer, sString, false) != -1)
+#if defined DEGUGMODE
+										LogToFileEx(g_sDebugPath, "File %s contains required extension: %s", sBuffer, sExt);
+										LogToFileEx(g_sDebugPath, "");
+#endif
+										
+										if((StrContains(sBuffer, sExclude, false) == -1) && !StrEqual(sExclude, "", false))
 										{
 #if defined DEGUGMODE
-											LogToFileEx(g_sDebugPath, "File %s contains string %s (case insensitive)", sBuffer, sString);
+											LogToFileEx(g_sDebugPath, "File %s excludes the string %s", sBuffer, sExclude);
 											LogToFileEx(g_sDebugPath, "");
 #endif
-
-											if((StrContains(sBuffer, sExt, false) != -1) || StrEqual(sExt, "any", false))
+											
+											decl String:sDelFile[PLATFORM_MAX_PATH];
+											Format(sDelFile, sizeof(sDelFile), "%s/%s", sRootFilePath, sBuffer);
+											fDaysOld = ((float(GetTime() - GetFileTime(sDelFile, FileTime_LastChange)))/86400);
+											if(GetFileTime(sDelFile, FileTime_LastChange) < (GetTime() - (86400 * RoundFloat(fRootDays)) + 30))
 											{
-#if defined DEGUGMODE
-												LogToFileEx(g_sDebugPath, "File %s contains required extension: %s", sBuffer, sExt);
-												LogToFileEx(g_sDebugPath, "");
-#endif
-												
-												if((StrContains(sBuffer, sExclude, false) == -1) && !StrEqual(sExclude, "", false))
+												if(StrEqual(sRootAction, "delete", false))
 												{
+													DeleteFile(sDelFile);
+													
 #if defined DEGUGMODE
-													LogToFileEx(g_sDebugPath, "File %s does not contain string %s", sBuffer, sExclude);
+													LogToFileEx(g_sDebugPath, "File deleted: %s (%f days old)", sDelFile, fDaysOld);
 													LogToFileEx(g_sDebugPath, "");
 #endif
 													
-													decl String:sDelFile[PLATFORM_MAX_PATH];
-													Format(sDelFile, sizeof(sDelFile), "%s/%s", sRootFilePath, sBuffer);
-													fDaysOld = ((float(GetTime() - GetFileTime(sDelFile, FileTime_LastChange)))/86400);
-													
-													if(GetFileTime(sDelFile, FileTime_LastChange) < (GetTime() - (86400 * RoundFloat(fRootDays)) + 30))
+													if(g_bLog)
 													{
-														if(StrEqual(sRootAction, "delete", false))
-														{
-															DeleteFile(sDelFile);
-															
-#if defined DEGUGMODE
-															LogToFileEx(g_sDebugPath, "File deleted: %s (%f days old)", sDelFile, fDaysOld);
-															LogToFileEx(g_sDebugPath, "");
-#endif
-															
-															if(g_bLog)
-															{
-																LogToFileEx(g_sCleanPath, "Cleared old file: %s (%f days old)", sDelFile, fDaysOld);
-															}
-														}
-														else if(StrEqual(sRootAction, "move", false) && !StrEqual(sNewRootFilePath, "none", false))
-														{
-															MoveFile(sRootFilePath, sNewRootFilePath, sBuffer);
-															
-#if defined DEGUGMODE
-															LogToFileEx(g_sDebugPath, "File moved: %s (%f days old) to %s", sDelFile, fDaysOld, sNewRootFilePath);
-															LogToFileEx(g_sDebugPath, "");
-#endif
-															
-															if(g_bLog)
-															{
-																LogToFileEx(g_sCleanPath, "Moved old file: %s (%f days old) to %s", sDelFile, fDaysOld, sNewRootFilePath);
-															}
-														}
-														else if(StrEqual(sRootAction, "copy", false) && !StrEqual(sNewRootFilePath, "none", false))
-														{
-															CopyFile_NotTxt_OverWriteExisting(sRootFilePath, sNewRootFilePath, sBuffer);
-#if defined DEGUGMODE
-															LogToFileEx(g_sDebugPath, "File copied: %s (%f days old) to %s", sDelFile, fDaysOld, sNewRootFilePath);
-															LogToFileEx(g_sDebugPath, "");
-#endif
-															
-															if(g_bLog)
-															{
-																LogToFileEx(g_sCleanPath, "Copied old file: %s (%f days old) to %s", sDelFile, fDaysOld, sNewRootFilePath);
-															}
-														}
-													}
-													else
-													{
-#if defined DEGUGMODE
-														LogToFileEx(g_sDebugPath, "File %s ignored - Not old enough: %f days old", sDelFile, fDaysOld);
-														LogToFileEx(g_sDebugPath, "");
-#endif
+														LogToFileEx(g_sCleanPath, "Cleared old file: %s (%f days old)", sDelFile, fDaysOld);
 													}
 												}
-												else
+												else if(StrEqual(sRootAction, "move", false) && !StrEqual(sNewRootFilePath, "none", false))
 												{
+													MoveFile(sRootFilePath, sNewRootFilePath, sBuffer);
+
 #if defined DEGUGMODE
-													LogToFileEx(g_sDebugPath, "File %s ignored for containing string %s", sBuffer, sExclude);
+													LogToFileEx(g_sDebugPath, "File moved: %s (%f days old) to %s", sDelFile, fDaysOld, sNewRootFilePath);
 													LogToFileEx(g_sDebugPath, "");
 #endif
+													
+													if(g_bLog)
+													{
+														LogToFileEx(g_sCleanPath, "Moved old file: %s (%f days old) to %s", sDelFile, fDaysOld, sNewRootFilePath);
+													}
+												}
+												else if(StrEqual(sRootAction, "copy", false) && !StrEqual(sNewRootFilePath, "none", false))
+												{
+													CopyFile_NotTxt_OverWriteExisting(sRootFilePath, sNewRootFilePath, sBuffer);
+
+#if defined DEGUGMODE
+													LogToFileEx(g_sDebugPath, "File copied: %s (%f days old) to %s", sDelFile, fDaysOld, sNewRootFilePath);
+													LogToFileEx(g_sDebugPath, "");
+#endif
+													
+													if(g_bLog)
+													{
+														LogToFileEx(g_sCleanPath, "Copied old file: %s (%f days old) to %s", sDelFile, fDaysOld, sNewRootFilePath);
+													}
 												}
 											}
 											else
 											{
 #if defined DEGUGMODE
-												LogToFileEx(g_sDebugPath, "File %s ignored for not having required extension: %s", sBuffer, sExt);
+												LogToFileEx(g_sDebugPath, "File %s ignored - Not old enough: %f days old", sDelFile, fDaysOld);
 												LogToFileEx(g_sDebugPath, "");
 #endif
 											}
@@ -681,37 +450,43 @@ RunSetups()
 										else
 										{
 #if defined DEGUGMODE
-											LogToFileEx(g_sDebugPath, "File %s ignored for not containing string %s (case insensitive)", sBuffer, sString);
+											LogToFileEx(g_sDebugPath, "File %s ignored for containing string %s", sBuffer, sExclude);
 											LogToFileEx(g_sDebugPath, "");
 #endif
 										}
 									}
-									
+									else
+									{
 #if defined DEGUGMODE
-									LogToFileEx(g_sDebugPath, "------------------------------------------------------ Next File -------------------------------------------------------------");
+										LogToFileEx(g_sDebugPath, "File %s ignored for not having required extension: %s", sBuffer, sExt);
+										LogToFileEx(g_sDebugPath, "");
+#endif
+									}
+								}
+								else
+								{
+#if defined DEGUGMODE
+									LogToFileEx(g_sDebugPath, "File %s ignored for not containing string %s (case sensitive = %i)", sBuffer, sString, iRootCase);
+									LogToFileEx(g_sDebugPath, "");
 #endif
 								}
 							}
-						}
-						else
-						{
 #if defined DEGUGMODE
-							LogToFileEx(g_sDebugPath, "Unable to open directory - bad handle for file path: %s", sRootFilePath);
-							LogToFileEx(g_sDebugPath, "");
+							LogToFileEx(g_sDebugPath, "------------------------------------------------------ Next File -------------------------------------------------------------");
 #endif
 						}
-						
-#if defined DEGUGMODE
-						LogToFileEx(g_sDebugPath, "---------------------------------------------------- File Search Complete ----------------------------------------------------");
-#endif
 					}
 					else
 					{
 #if defined DEGUGMODE
-						LogToFileEx(g_sDebugPath, "================================ Setup Ignored - enabled not set to 1: %s ================================", sSectionName);
+						LogToFileEx(g_sDebugPath, "Unable to open directory - bad handle for file path: %s", sRootFilePath);
 						LogToFileEx(g_sDebugPath, "");
 #endif
 					}
+						
+#if defined DEGUGMODE
+					LogToFileEx(g_sDebugPath, "---------------------------------------------------- File Search Complete ----------------------------------------------------");
+#endif
 				}
 				else
 				{
@@ -806,4 +581,6 @@ MoveFile(const String:sFromPath[], const String:sToPath[], const String:sFileNam
 4.2:
 	* Code updated.
 	* Changed debug mode to be upon compile only.
+4.3
+	* Cleanup of code.
 */
