@@ -243,3 +243,10 @@ This plugin allows users to create as many setups as desired for managing server
 Use this plugin at your own risk! It has been thoroughly tested. However, I am not responsible for any deleted files, etc. on your server from this plugin.
 
 That said, it works great! Just make sure your setup doesnt apply to files you dont want it to. For example, in the default .txt file, if you accidentally set the first setup to case insensitive, it would delete any file in your logs folder with an "L" in it, having the extension ".log", excluding the word chat, and older than 3 days since its last edit. With case sensitive, it would need to be a capitol L in the file name (which most files would not have, and those that do can be filtered out using the "exclude" string).
+
+
+
+
+
+
+###Check out my plugin list: http://www.togcoding.tech/togcoding/index.php
