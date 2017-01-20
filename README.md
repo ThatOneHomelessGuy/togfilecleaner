@@ -249,4 +249,4 @@ That said, it works great! Just make sure your setup doesnt apply to files you d
 
 
 
-###Check out my plugin list: http://www.togcoding.tech/togcoding/index.php
+###Check out my plugin list: http://www.togcoding.com/togcoding/index.php
