@@ -24,7 +24,7 @@ public Plugin:myinfo =
 	author = "That One Guy",
 	description = "Performs file actions for logs of a desired extension, filenames, and age at specified paths",
 	version = PLUGIN_VERSION,
-	url = "https://forums.alliedmods.net/member.php?u=188078"
+	url = "http://www.togcoding.com"
 }
 
 public OnPluginStart()
