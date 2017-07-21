@@ -2,6 +2,7 @@
 (togfilecleaner)
 
 
+
 ## Description
 This plugin allows users to create as many setups as desired for managing servers files. When each setup is run, the plugin searches in the path set and determines if each file within the path matches the criteria set by the user in the .txt file. The .txt file can contain as few or as many setups as desired. For matching files, the specified action is then taken (either delete, move, or copy...there are plans for more in the future).
 
