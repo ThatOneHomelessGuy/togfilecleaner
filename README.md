@@ -1,23 +1,24 @@
-#TOG File Cleaner
+# TOG File Cleaner
 (togfilecleaner)
-##Description
+
+## Description
 This plugin allows users to create as many setups as desired for managing servers files. When each setup is run, the plugin searches in the path set and determines if each file within the path matches the criteria set by the user in the .txt file. The .txt file can contain as few or as many setups as desired. For matching files, the specified action is then taken (either delete, move, or copy...there are plans for more in the future).
 
 
 
-##Installation
+## Installation
 * Put togfilecleaner.smx in the following folder: /addons/sourcemod/plugins/
 * Put togfilecleaner.txt in the following folder: /addons/sourcemod/configs/
 
 
 
-##CVars
+## CVars
 * **tfc_log** - Enables logging of files that actions are taken on.
 
 
 
 
-##Default Configuration File
+## Default Configuration File
 <details>
 <summary>Click to Open Spoiler</summary>
 <p>
@@ -111,7 +112,7 @@ This plugin allows users to create as many setups as desired for managing server
 
 
 
-##Explanation of Configuration File
+## Explanation of Configuration File
 <details>
 <summary>Click to Open Spoiler</summary>
 <p>
@@ -206,7 +207,7 @@ This plugin allows users to create as many setups as desired for managing server
 
 
 
-##Changelog:
+## Changelog:
 <details>
 <summary>Click to Open Changelog</summary>
 <p>
@@ -239,7 +240,7 @@ This plugin allows users to create as many setups as desired for managing server
 </p>
 </details>
 
-##Disclaimer
+## Disclaimer
 Use this plugin at your own risk! It has been thoroughly tested. However, I am not responsible for any deleted files, etc. on your server from this plugin.
 
 That said, it works great! Just make sure your setup doesnt apply to files you dont want it to. For example, in the default .txt file, if you accidentally set the first setup to case insensitive, it would delete any file in your logs folder with an "L" in it, having the extension ".log", excluding the word chat, and older than 3 days since its last edit. With case sensitive, it would need to be a capitol L in the file name (which most files would not have, and those that do can be filtered out using the "exclude" string).
@@ -249,4 +250,4 @@ That said, it works great! Just make sure your setup doesnt apply to files you d
 
 
 
-###Check out my plugin list: http://www.togcoding.com/togcoding/index.php
+### Check out my plugin list: http://www.togcoding.com/togcoding/index.php
