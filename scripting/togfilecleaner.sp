@@ -3,22 +3,24 @@
 #pragma dynamic 131072 //increase stack space to from 4 kB to 131072 cells (or 512KB, a cell is 4 bytes).*/
 
 #include <sourcemod>
-#include <autoexecconfig>	//https://github.com/Impact123/AutoExecConfig or https://forums.alliedmods.net/showthread.php?p=1862459
+#include <autoexecconfig>	//https://github.com/Impact123/AutoExecConfig or http://www.togcoding.com/showthread.php?p=1862459
 
-#define PLUGIN_VERSION "4.3"
+#define PLUGIN_VERSION "4.4.0"
 //#define DEGUGMODE ""	//uncomment this define to compile with debugging. Be sure to switch back to a compilation without debugging after you have finished your debug.
 
-new Handle:g_hLog = INVALID_HANDLE;
-new bool:g_bLog;					//Enable logs
+#pragma newdecls required
 
-new Handle:hKeyValues = INVALID_HANDLE;
+Handle g_hLog = null;
+bool g_bLog;					//Enable logs
 
-new String:g_sCleanPath[PLATFORM_MAX_PATH];		//deleted files log file path
+Handle hKeyValues = null;
+
+char g_sCleanPath[PLATFORM_MAX_PATH];		//deleted files log file path
 #if defined DEGUGMODE
-new String:g_sDebugPath[PLATFORM_MAX_PATH];		//debug file path
+char g_sDebugPath[PLATFORM_MAX_PATH];		//debug file path
 #endif
 
-public Plugin:myinfo =
+public Plugin myinfo =
 {
 	name = "TOGs File Cleaner",
 	author = "That One Guy",
@@ -27,10 +29,10 @@ public Plugin:myinfo =
 	url = "http://www.togcoding.com"
 }
 
-public OnPluginStart()
+public void OnPluginStart()
 {
 	AutoExecConfig_SetFile("togfilecleaner");
-	AutoExecConfig_CreateConVar("tfc_version", PLUGIN_VERSION, "TOGs File Cleaner: Version", FCVAR_PLUGIN|FCVAR_NOTIFY|FCVAR_DONTRECORD);
+	AutoExecConfig_CreateConVar("tfc_version", PLUGIN_VERSION, "TOGs File Cleaner: Version", FCVAR_NOTIFY|FCVAR_DONTRECORD);
 	
 	g_hLog = AutoExecConfig_CreateConVar("tfc_log", "0", "Enables logging of files that actions are taken on.", FCVAR_NONE, true, 0.0, true, 1.0);
 	HookConVarChange(g_hLog, OnCVarChange);
@@ -46,7 +48,7 @@ public OnPluginStart()
 	BuildPath(Path_SM, g_sCleanPath, sizeof(g_sCleanPath), "logs/togsfilecleaner.log");
 }
 
-public OnCVarChange(Handle:hCVar, const String:sOldValue[], const String:sNewValue[])
+public void OnCVarChange(Handle hCVar, const char[] sOldValue, const char[] sNewValue)
 {
 	if(hCVar == g_hLog)
 	{
@@ -54,14 +56,14 @@ public OnCVarChange(Handle:hCVar, const String:sOldValue[], const String:sNewVal
 	}
 }
 
-public OnMapStart()
+public void OnMapStart()
 {
 	RunSetups();
 }
 
-RunSetups()
+void RunSetups()
 {
-	decl String:sCfgPath[256];
+	char sCfgPath[256];
 	BuildPath(Path_SM, sCfgPath, sizeof(sCfgPath), "configs/togfilecleaner.txt");
 	
 	if(!FileExists(sCfgPath))
@@ -105,7 +107,7 @@ RunSetups()
 			
 			do
 			{
-				decl String:sSectionName[30];
+				char sSectionName[30];
 				KvGetSectionName(hKeyValues, sSectionName, sizeof(sSectionName));
 				if(!KvGetNum(hKeyValues, "enabled", 0))
 				{
@@ -116,13 +118,14 @@ RunSetups()
 					continue;
 				}
 				
-				decl String:sBuffer[PLATFORM_MAX_PATH];
-				new Handle:hDirectory = INVALID_HANDLE;
-				new FileType:type = FileType_Unknown;
-				new Float:fDaysOld;
+				char sBuffer[PLATFORM_MAX_PATH];
+				Handle hDirectory = null;
+				FileType type = FileType_Unknown;
+				float fDaysOld;
 				
-				decl String:sFolder[PLATFORM_MAX_PATH], String:sString[30], String:sExt[30], String:sExclude[30], String:sAction[30], String:sNewFilePath[PLATFORM_MAX_PATH];
-				new Float:fDays, iCase;
+				char sFolder[PLATFORM_MAX_PATH], sString[30], sExt[30], sExclude[30], sAction[30], sNewFilePath[PLATFORM_MAX_PATH];
+				float fDays;
+				int iCase;
 				KvGetString(hKeyValues, "filepath", sFolder, sizeof(sFolder), "logs");
 				fDays = KvGetFloat(hKeyValues, "days", 3.0);
 				KvGetString(hKeyValues, "string", sString, sizeof(sString), "none");
@@ -161,7 +164,7 @@ RunSetups()
 #endif
 					
 					hDirectory = OpenDirectory(sFolder);
-					if(hDirectory != INVALID_HANDLE)
+					if(hDirectory != null)
 					{
 						while(ReadDirEntry(hDirectory, sBuffer, sizeof(sBuffer), type))
 						{
@@ -181,14 +184,14 @@ RunSetups()
 										LogToFileEx(g_sDebugPath, "");
 #endif
 										
-										if((StrContains(sBuffer, sExclude, false) == -1) && !StrEqual(sExclude, "", false))
+										if((StrContains(sBuffer, sExclude, false) == -1) || StrEqual(sExclude, "", false))
 										{
 #if defined DEGUGMODE
 											LogToFileEx(g_sDebugPath, "File %s excludes the string %s", sBuffer, sExclude);
 											LogToFileEx(g_sDebugPath, "");
 #endif
 											
-											decl String:sDelFile[PLATFORM_MAX_PATH];
+											char sDelFile[PLATFORM_MAX_PATH];
 											Format(sDelFile, sizeof(sDelFile), "%s/%s", sFolder, sBuffer);
 											fDaysOld = ((float(GetTime() - GetFileTime(sDelFile, FileTime_LastChange))/86400));
 											
@@ -210,7 +213,7 @@ RunSetups()
 												}
 												else if(StrEqual(sAction, "move", false) && !StrEqual(sNewFilePath, "none", false))
 												{
-													decl String:sMoveBuild[PLATFORM_MAX_PATH];
+													char sMoveBuild[PLATFORM_MAX_PATH];
 													BuildPath(Path_SM, sMoveBuild, sizeof(sMoveBuild), "%s",sNewFilePath);
 													MoveFile(sFolder, sMoveBuild, sBuffer);
 													
@@ -226,7 +229,7 @@ RunSetups()
 												}
 												else if(StrEqual(sAction, "copy", false) && !StrEqual(sNewFilePath, "none", false))
 												{
-													decl String:sMoveBuild[PLATFORM_MAX_PATH];
+													char sMoveBuild[PLATFORM_MAX_PATH];
 													BuildPath(Path_SM, sMoveBuild, sizeof(sMoveBuild), "%s",sNewFilePath);
 													CopyFile_NotTxt_OverWriteExisting(sFolder, sMoveBuild, sBuffer);
 													
@@ -284,10 +287,10 @@ RunSetups()
 #endif
 				}
 				
-				if(hDirectory != INVALID_HANDLE)
+				if(hDirectory != null)
 				{
 					CloseHandle(hDirectory);
-					hDirectory = INVALID_HANDLE;
+					hDirectory = null;
 				}
 			} while(KvGotoNextKey(hKeyValues, false));
 			KvGoBack(hKeyValues);
@@ -309,7 +312,7 @@ RunSetups()
 			
 			do
 			{
-				decl String:sSectionName[30];
+				char sSectionName[30];
 				KvGetSectionName(hKeyValues, sSectionName, sizeof(sSectionName));
 				if(!KvGetNum(hKeyValues, "enabled", 0))
 				{
@@ -320,13 +323,14 @@ RunSetups()
 					continue;
 				}
 				
-				new String:sBuffer[256];
-				new Handle:hDirectory = INVALID_HANDLE;
-				new FileType:type = FileType_Unknown;
-				new Float:fDaysOld;
+				char sBuffer[256];
+				Handle hDirectory = null;
+				FileType type = FileType_Unknown;
+				float fDaysOld;
 				
-				decl String:sRootFilePath[256], String:sString[30], String:sExt[30], String:sExclude[30], String:sRootAction[30], String:sNewRootFilePath[256];
-				new Float:fRootDays, iRootCase;
+				char sRootFilePath[256], sString[30], sExt[30], sExclude[30], sRootAction[30], sNewRootFilePath[256];
+				float fRootDays;
+				int iRootCase;
 				KvGetString(hKeyValues, "filepath", sRootFilePath, sizeof(sRootFilePath), "");
 				fRootDays = KvGetFloat(hKeyValues, "days", 3.0);
 				KvGetString(hKeyValues, "string", sString, sizeof(sString), "none");
@@ -365,7 +369,7 @@ RunSetups()
 					LogToFileEx(g_sDebugPath, ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> File Search Beginning <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
 #endif
 					hDirectory = OpenDirectory(sRootFilePath);
-					if(hDirectory != INVALID_HANDLE)
+					if(hDirectory != null)
 					{
 						while(ReadDirEntry(hDirectory, sBuffer, sizeof(sBuffer), type))
 						{
@@ -384,14 +388,14 @@ RunSetups()
 										LogToFileEx(g_sDebugPath, "");
 #endif
 										
-										if((StrContains(sBuffer, sExclude, false) == -1) && !StrEqual(sExclude, "", false))
+										if((StrContains(sBuffer, sExclude, false) == -1) || StrEqual(sExclude, "", false))
 										{
 #if defined DEGUGMODE
 											LogToFileEx(g_sDebugPath, "File %s excludes the string %s", sBuffer, sExclude);
 											LogToFileEx(g_sDebugPath, "");
 #endif
 											
-											decl String:sDelFile[PLATFORM_MAX_PATH];
+											char sDelFile[PLATFORM_MAX_PATH];
 											Format(sDelFile, sizeof(sDelFile), "%s/%s", sRootFilePath, sBuffer);
 											fDaysOld = ((float(GetTime() - GetFileTime(sDelFile, FileTime_LastChange)))/86400);
 											if(GetFileTime(sDelFile, FileTime_LastChange) < (GetTime() - (86400 * RoundFloat(fRootDays)) + 30))
@@ -496,10 +500,10 @@ RunSetups()
 #endif
 				}
 				
-				if(hDirectory != INVALID_HANDLE)
+				if(hDirectory != null)
 				{
 					CloseHandle(hDirectory);
-					hDirectory = INVALID_HANDLE;
+					hDirectory = null;
 				}
 			} while(KvGotoNextKey(hKeyValues, false));
 			KvGoBack(hKeyValues);
@@ -508,9 +512,9 @@ RunSetups()
 	CloseHandle(hKeyValues);
 }
 
-bool:CopyFile_NotTxt_OverWriteExisting(const String:sStartPath[], const String:sEndPath[], const String:sFileName[])
+bool CopyFile_NotTxt_OverWriteExisting(const char[] sStartPath, const char[] sEndPath, const char[] sFileName)
 {
-	decl String:sFullFromPath[256], String:sFullToPath[256];
+	char sFullFromPath[256], sFullToPath[256];
 	Format(sFullFromPath, sizeof(sFullFromPath), "%s/%s", sStartPath, sFileName);
 	Format(sFullToPath, sizeof(sFullToPath), "%s/%s", sEndPath, sFileName);
 	
@@ -520,12 +524,12 @@ bool:CopyFile_NotTxt_OverWriteExisting(const String:sStartPath[], const String:s
 		return false;
 	}
 
-	new vBuffer[2][15000];
+	int vBuffer[2][15000];
 	
-	new Handle:hFile = OpenFile(sFullFromPath, "r");
-	new Handle:hFileTemp = OpenFile(sFullToPath, "w");
+	Handle hFile = OpenFile(sFullFromPath, "r");
+	Handle hFileTemp = OpenFile(sFullToPath, "w");
 	
-	if(hFile != INVALID_HANDLE)
+	if(hFile != null)
 	{
 		while(ReadFile(hFile, vBuffer[0], 1, 1))
 		{
@@ -537,20 +541,20 @@ bool:CopyFile_NotTxt_OverWriteExisting(const String:sStartPath[], const String:s
 		return false;
 	}
 	
-	if(hFile != INVALID_HANDLE)
+	if(hFile != null)
 	{
 		CloseHandle(hFile);
 	}
-	if(hFileTemp != INVALID_HANDLE)
+	if(hFileTemp != null)
 	{
 		CloseHandle(hFileTemp);
 	}
 	return true;
 }
 
-MoveFile(const String:sFromPath[], const String:sToPath[], const String:sFileName[])
+void MoveFile(const char[] sFromPath, const char[] sToPath, const char[] sFileName)
 {
-	decl String:sFullFromPath[256];
+	char sFullFromPath[256];
 	Format(sFullFromPath, sizeof(sFullFromPath), "%s/%s", sFromPath, sFileName);
 	if(CopyFile_NotTxt_OverWriteExisting(sFromPath, sToPath, sFileName) == true)
 	{
@@ -582,5 +586,8 @@ MoveFile(const String:sFromPath[], const String:sToPath[], const String:sFileNam
 	* Code updated.
 	* Changed debug mode to be upon compile only.
 4.3
-	* Cleanup of code.
+	* Cleanup.
+4.4.0
+	* Converted to new syntax. Did not convert to classes yet.
+	* Fixed handling of setups with no/blank exclusion phrases.
 */
