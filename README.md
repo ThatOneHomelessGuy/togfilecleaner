@@ -214,6 +214,13 @@ This plugin allows users to create as many setups as desired for managing server
 <summary>Click to Open Changelog</summary>
 <p>
 
+<b>v4.4 (11/26/17)</b>
+<li>Converted to new syntax. Did not convert to classes yet.</li>
+<li>Fixed handling of setups with no/blank exclusion phrases.</li>
+
+<b>v4.3</b>
+<li>Code cleanup.</li>
+
 <b>v4.2 (8/08/15)</b>
 <li>Code updated.</li>
 <li>Changed debug mode to be upon compile only.</li>
